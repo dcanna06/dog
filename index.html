@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>G'day! The Talking Aussie Dog</title>
+<style>
+  :root {
+    --sky: #fde9c8;
+    --sky2: #f6c89f;
+    --grass: #b9d96a;
+    --fur: #c98a4b;
+    --fur-dark: #8a5a2b;
+    --belly: #f3d6a8;
+    --nose: #2b2118;
+    --tongue: #ff6b8a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #2b2118;
+    background: linear-gradient(180deg, var(--sky) 0%, var(--sky2) 60%, var(--grass) 60%, #9bc24a 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+  }
+  h1 { margin: 8px 0 4px; font-size: 28px; }
+  .sub { color: #5a4632; margin-bottom: 18px; font-size: 14px; }
+
+  .stage {
+    position: relative;
+    width: min(520px, 92vw);
+    aspect-ratio: 1 / 1;
+  }
+
+  .speech {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translate(-50%, -10%);
+    background: #fff;
+    border: 2px solid #2b2118;
+    border-radius: 16px;
+    padding: 10px 14px;
+    max-width: 80%;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1.3;
+    box-shadow: 3px 3px 0 #2b2118;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+  }
+  .speech.show { opacity: 1; }
+  .speech::after {
+    content: "";
+    position: absolute;
+    bottom: -14px; left: 30%;
+    width: 18px; height: 18px;
+    background: #fff;
+    border-right: 2px solid #2b2118;
+    border-bottom: 2px solid #2b2118;
+    transform: rotate(45deg);
+  }
+
+  /* Dog */
+  .dog {
+    position: absolute;
+    bottom: 6%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 78%;
+    aspect-ratio: 1 / 1;
+  }
+  .dog svg { width: 100%; height: 100%; display: block; }
+
+  .controls {
+    margin-top: 22px;
+    width: min(520px, 92vw);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 84px;
+    padding: 12px;
+    border: 2px solid #2b2118;
+    border-radius: 12px;
+    font: inherit;
+    resize: vertical;
+    box-shadow: 3px 3px 0 #2b2118;
+    background: #fffdf7;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    flex: 1 1 140px;
+    padding: 12px 14px;
+    border: 2px solid #2b2118;
+    border-radius: 12px;
+    background: #ffd166;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 #2b2118;
+    transition: transform .05s ease;
+  }
+  button:hover { background: #ffdd88; }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #2b2118; }
+  button.secondary { background: #cbe896; }
+  button.danger { background: #ff9b8a; }
+
+  .voice-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  select {
+    flex: 1;
+    padding: 8px 10px;
+    border: 2px solid #2b2118;
+    border-radius: 10px;
+    background: #fffdf7;
+    font: inherit;
+  }
+  label { font-size: 14px; color: #3a2d1c; }
+  .slider-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .slider-row > div { flex: 1 1 140px; display: flex; flex-direction: column; gap: 4px; }
+  input[type="range"] { width: 100%; }
+
+  .status {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #3a2d1c;
+    min-height: 18px;
+  }
+
+  /* Animations */
+  @keyframes tail-wag {
+    0%, 100% { transform: rotate(-15deg); }
+    50%      { transform: rotate(25deg); }
+  }
+  .tail { transform-origin: 100% 100%; animation: tail-wag 0.5s ease-in-out infinite; }
+
+  @keyframes blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    95%, 97%      { transform: scaleY(0.1); }
+  }
+  .eye { transform-box: fill-box; transform-origin: center; animation: blink 4s infinite; }
+
+  @keyframes mouth-talk {
+    0%, 100% { transform: scaleY(1); }
+    50%      { transform: scaleY(1.7); }
+  }
+  .dog.talking .mouth-open { animation: mouth-talk 0.18s ease-in-out infinite; transform-origin: center top; }
+  .dog .mouth-open, .dog .tongue { opacity: 0; }
+  .dog.talking .mouth-open, .dog.talking .tongue { opacity: 1; }
+  .dog.talking .mouth-closed { opacity: 0; }
+
+  @keyframes bob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
+  .dog.talking { animation: bob 0.6s ease-in-out infinite; }
+
+  footer { margin-top: 18px; font-size: 12px; color: #4a3a25; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>G'day! The Talking Aussie Dog</h1>
+  <div class="sub">Type something below and tell the dog to talk, mate.</div>
+
+  <div class="stage">
+    <div id="speech" class="speech">G'day, mate!</div>
+
+    <div id="dog" class="dog">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- tail -->
+        <g class="tail">
+          <path d="M155,120 q25,-15 30,-40 q-18,8 -32,28 z" fill="var(--fur)" stroke="var(--fur-dark)" stroke-width="2"/>
+        </g>
+
+        <!-- body -->
+        <ellipse cx="105" cy="135" rx="55" ry="38" fill="var(--fur)" stroke="var(--fur-dark)" stroke-width="2"/>
+        <ellipse cx="105" cy="148" rx="34" ry="20" fill="var(--belly)"/>
+
+        <!-- back leg -->
+        <rect x="130" y="155" width="18" height="28" rx="6" fill="var(--fur)" stroke="var(--fur-dark)" stroke-width="2"/>
+        <!-- front leg -->
+        <rect x="70"  y="155" width="18" height="28" rx="6" fill="var(--fur)" stroke="var(--fur-dark)" stroke-width="2"/>
+
+        <!-- head -->
+        <g>
+          <!-- left ear -->
+          <path d="M65,70 q-12,8 -10,30 q12,-2 22,-18 z" fill="var(--fur-dark)"/>
+          <!-- right ear -->
+          <path d="M118,68 q14,4 18,28 q-14,2 -24,-12 z" fill="var(--fur-dark)"/>
+
+          <circle cx="92" cy="92" r="38" fill="var(--fur)" stroke="var(--fur-dark)" stroke-width="2"/>
+
+          <!-- snout -->
+          <ellipse cx="92" cy="108" rx="22" ry="16" fill="var(--belly)" stroke="var(--fur-dark)" stroke-width="2"/>
+
+          <!-- eyes -->
+          <g class="eye"><circle cx="78" cy="86" r="4" fill="#1c140d"/></g>
+          <g class="eye"><circle cx="106" cy="86" r="4" fill="#1c140d"/></g>
+
+          <!-- eyebrows -->
+          <path d="M70,76 q8,-5 16,-2" stroke="var(--fur-dark)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path d="M99,74 q8,-3 16,2" stroke="var(--fur-dark)" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+          <!-- nose -->
+          <ellipse cx="92" cy="100" rx="6" ry="4.5" fill="var(--nose)"/>
+          <line x1="92" y1="104" x2="92" y2="112" stroke="var(--nose)" stroke-width="2"/>
+
+          <!-- mouth (closed) -->
+          <path class="mouth-closed" d="M82,114 q10,8 20,0" stroke="var(--nose)" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+          <!-- mouth (open) -->
+          <ellipse class="mouth-open" cx="92" cy="116" rx="9" ry="6" fill="#3a1a1a"/>
+          <ellipse class="tongue" cx="92" cy="119" rx="6" ry="3.5" fill="var(--tongue)"/>
+        </g>
+
+        <!-- collar -->
+        <rect x="58" y="124" width="50" height="8" rx="2" fill="#d94f4f" stroke="var(--fur-dark)" stroke-width="2"/>
+        <circle cx="83" cy="134" r="4" fill="#ffd166" stroke="var(--fur-dark)" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="controls">
+    <textarea id="text" placeholder="What should the dog say? e.g. 'G'day mate, throw us a snag on the barbie!'">G'day mate! Welcome to the outback.</textarea>
+
+    <div class="row">
+      <button id="speak">Tell the dog to talk</button>
+      <button id="stop" class="danger" type="button">Stop</button>
+      <button id="random" class="secondary" type="button">Aussie phrase</button>
+    </div>
+
+    <div class="voice-row">
+      <label for="voice">Voice:</label>
+      <select id="voice"><option>Loading voices…</option></select>
+    </div>
+
+    <div class="slider-row">
+      <div>
+        <label for="rate">Rate: <span id="rateVal">1.0</span></label>
+        <input id="rate" type="range" min="0.5" max="1.6" step="0.05" value="1" />
+      </div>
+      <div>
+        <label for="pitch">Pitch: <span id="pitchVal">1.0</span></label>
+        <input id="pitch" type="range" min="0.5" max="1.8" step="0.05" value="1" />
+      </div>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <footer>
+    Uses your browser's built-in speech synthesis. For the best Aussie sound,
+    pick a voice labelled <code>en-AU</code>. Chrome, Edge and Safari work great.
+  </footer>
+
+<script>
+(() => {
+  const synth = window.speechSynthesis;
+  const dog = document.getElementById('dog');
+  const speech = document.getElementById('speech');
+  const speakBtn = document.getElementById('speak');
+  const stopBtn = document.getElementById('stop');
+  const randomBtn = document.getElementById('random');
+  const text = document.getElementById('text');
+  const voiceSel = document.getElementById('voice');
+  const rate = document.getElementById('rate');
+  const pitch = document.getElementById('pitch');
+  const rateVal = document.getElementById('rateVal');
+  const pitchVal = document.getElementById('pitchVal');
+  const status = document.getElementById('status');
+
+  const aussiePhrases = [
+    "G'day mate! How ya goin'?",
+    "Crikey, that's a ripper!",
+    "Throw another shrimp on the barbie, would ya?",
+    "Fair dinkum, that's the best snag I've ever had.",
+    "No worries, mate. She'll be right.",
+    "Strewth! Did you see that kangaroo?",
+    "Let's grab a cuppa and head down to the beach.",
+    "Yeah nah, I reckon we should give it a burl.",
+    "Bonza day for a barbie, isn't it?",
+    "Heaps good, mate. Heaps good."
+  ];
+
+  if (!synth) {
+    status.textContent = "Sorry mate — your browser doesn't support speech synthesis.";
+    speakBtn.disabled = true;
+  }
+
+  let voices = [];
+  function loadVoices() {
+    voices = synth.getVoices();
+    if (!voices.length) return;
+
+    voiceSel.innerHTML = '';
+    const aussie = voices.filter(v => /en[-_]AU/i.test(v.lang));
+    const otherEn = voices.filter(v => /^en/i.test(v.lang) && !/en[-_]AU/i.test(v.lang));
+    const rest = voices.filter(v => !/^en/i.test(v.lang));
+
+    function addGroup(label, list) {
+      if (!list.length) return;
+      const og = document.createElement('optgroup');
+      og.label = label;
+      list.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v.name;
+        o.textContent = `${v.name} (${v.lang})${v.default ? ' — default' : ''}`;
+        og.appendChild(o);
+      });
+      voiceSel.appendChild(og);
+    }
+    addGroup('Australian English', aussie);
+    addGroup('Other English', otherEn);
+    addGroup('Other languages', rest);
+
+    const preferred = aussie[0] || otherEn[0] || voices[0];
+    if (preferred) voiceSel.value = preferred.name;
+
+    if (!aussie.length) {
+      status.textContent = "No en-AU voice found in this browser. Using the closest English voice — try Chrome or Edge for an Aussie one.";
+    } else {
+      status.textContent = `Ready. Using ${preferred.name}.`;
+    }
+  }
+  loadVoices();
+  if (synth) synth.onvoiceschanged = loadVoices;
+
+  rate.addEventListener('input', () => rateVal.textContent = (+rate.value).toFixed(2));
+  pitch.addEventListener('input', () => pitchVal.textContent = (+pitch.value).toFixed(2));
+
+  function showSpeech(t) {
+    speech.textContent = t;
+    speech.classList.add('show');
+  }
+  function hideSpeech() {
+    speech.classList.remove('show');
+  }
+
+  function speak(message) {
+    if (!synth) return;
+    const msg = (message ?? text.value).trim();
+    if (!msg) { status.textContent = "Type something for the dog to say."; return; }
+
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(msg);
+    const chosen = voices.find(v => v.name === voiceSel.value);
+    if (chosen) { u.voice = chosen; u.lang = chosen.lang; }
+    else { u.lang = 'en-AU'; }
+    u.rate = +rate.value;
+    u.pitch = +pitch.value;
+
+    u.onstart = () => { dog.classList.add('talking'); showSpeech(msg); status.textContent = "Talking…"; };
+    u.onend   = () => { dog.classList.remove('talking'); status.textContent = "Done."; setTimeout(hideSpeech, 800); };
+    u.onerror = (e) => { dog.classList.remove('talking'); status.textContent = "Error: " + (e.error || 'unknown'); };
+
+    synth.speak(u);
+  }
+
+  speakBtn.addEventListener('click', () => speak());
+  stopBtn.addEventListener('click', () => { synth.cancel(); dog.classList.remove('talking'); hideSpeech(); status.textContent = "Stopped."; });
+  randomBtn.addEventListener('click', () => {
+    const phrase = aussiePhrases[Math.floor(Math.random() * aussiePhrases.length)];
+    text.value = phrase;
+    speak(phrase);
+  });
+
+  text.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); speak(); }
+  });
+})();
+</script>
+</body>
+</html>
