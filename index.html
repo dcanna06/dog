@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Whiskers — The Talking Cat</title>
+<style>
+  :root {
+    --bg1: #1b1145;
+    --bg2: #3a1d6e;
+    --accent: #ffb86b;
+    --panel: rgba(255, 255, 255, 0.08);
+    --text: #f3eaff;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    background: radial-gradient(circle at 30% 20%, var(--bg2), var(--bg1) 70%);
+    overflow: hidden;
+  }
+
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    gap: 18px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(20px, 4vw, 34px);
+    letter-spacing: 1px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  h1 span { color: var(--accent); }
+
+  /* ---- Stage / cat ---- */
+  .stage {
+    position: relative;
+    width: min(340px, 80vw);
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cat {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 18px 24px rgba(0,0,0,0.35));
+  }
+
+  /* breathing / idle bob */
+  .cat-body { animation: bob 3.4s ease-in-out infinite; transform-origin: 130px 200px; }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-6px) rotate(-1deg); }
+  }
+
+  /* ear twitch when talking */
+  .talking .ear-l { animation: twitchL 0.5s ease-in-out infinite; transform-origin: 95px 70px; }
+  .talking .ear-r { animation: twitchR 0.6s ease-in-out infinite; transform-origin: 165px 70px; }
+  @keyframes twitchL { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-6deg)} }
+  @keyframes twitchR { 0%,100%{transform:rotate(0)} 50%{transform:rotate(6deg)} }
+
+  /* tail sway */
+  .tail { transform-origin: 200px 215px; animation: sway 2.8s ease-in-out infinite; }
+  @keyframes sway { 0%,100%{transform:rotate(-4deg)} 50%{transform:rotate(8deg)} }
+
+  /* blinking */
+  .eyelid { transform: scaleY(0); transform-origin: center; animation: blink 5s infinite; }
+  @keyframes blink {
+    0%, 92%, 100% { transform: scaleY(0); }
+    95%, 97%      { transform: scaleY(1); }
+  }
+
+  .speech {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translate(-50%, -100%) scale(0.6);
+    background: #fff;
+    color: #2a1b4d;
+    padding: 12px 16px;
+    border-radius: 16px;
+    max-width: 260px;
+    font-size: 15px;
+    line-height: 1.35;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.3);
+  }
+  .speech::after {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 11px solid transparent;
+    border-top-color: #fff;
+    border-bottom: 0;
+  }
+  .speech.show {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+
+  /* ---- Controls ---- */
+  .controls {
+    width: min(460px, 92vw);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .row { display: flex; gap: 10px; }
+
+  input[type="text"] {
+    flex: 1;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: none;
+    font-size: 16px;
+    background: var(--panel);
+    color: var(--text);
+    outline: none;
+    backdrop-filter: blur(6px);
+  }
+  input[type="text"]::placeholder { color: rgba(243,234,255,0.5); }
+
+  button {
+    padding: 14px 20px;
+    border-radius: 14px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: #2a1b4d;
+    transition: transform 0.1s ease, filter 0.15s ease;
+  }
+  button:hover { filter: brightness(1.05); }
+  button:active { transform: scale(0.96); }
+  button.ghost {
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  .voicebar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 13px;
+    color: rgba(243,234,255,0.75);
+  }
+  select {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: none;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 13px;
+  }
+  input[type="range"] { accent-color: var(--accent); }
+
+  .hint { font-size: 12px; color: rgba(243,234,255,0.5); text-align: center; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <h1>🐾 <span>Whiskers</span> the Talking Cat</h1>
+
+    <div class="stage">
+      <div class="speech" id="speech"></div>
+      <svg class="cat" id="cat" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+        <g class="cat-body">
+          <!-- tail -->
+          <path class="tail" d="M205,210 q45,-10 35,-55 q-3,-15 -18,-10 q12,6 9,22 q-6,30 -34,30 z" fill="#ff9e5e"/>
+
+          <!-- ears -->
+          <polygon class="ear-l" points="78,95 92,40 130,78" fill="#ff9e5e"/>
+          <polygon class="ear-r" points="182,95 168,40 130,78" fill="#ff9e5e"/>
+          <polygon points="88,86 96,55 116,77" fill="#ffd2a8"/>
+          <polygon points="172,86 164,55 144,77" fill="#ffd2a8"/>
+
+          <!-- head -->
+          <ellipse cx="130" cy="125" rx="68" ry="60" fill="#ffb574"/>
+
+          <!-- cheeks -->
+          <circle cx="96" cy="140" r="20" fill="#ffc68f"/>
+          <circle cx="164" cy="140" r="20" fill="#ffc68f"/>
+
+          <!-- eyes -->
+          <g>
+            <ellipse cx="106" cy="115" rx="12" ry="15" fill="#fff"/>
+            <circle cx="106" cy="118" r="7" fill="#2a1b4d"/>
+            <circle cx="103" cy="114" r="2.5" fill="#fff"/>
+            <rect class="eyelid" x="93" y="100" width="26" height="30" rx="12" fill="#ffb574"/>
+          </g>
+          <g>
+            <ellipse cx="154" cy="115" rx="12" ry="15" fill="#fff"/>
+            <circle cx="154" cy="118" r="7" fill="#2a1b4d"/>
+            <circle cx="151" cy="114" r="2.5" fill="#fff"/>
+            <rect class="eyelid" x="141" y="100" width="26" height="30" rx="12" fill="#ffb574"/>
+          </g>
+
+          <!-- nose -->
+          <polygon points="130,138 122,131 138,131" fill="#d2557a"/>
+
+          <!-- mouth (animated) -->
+          <ellipse class="mouth" id="mouth" cx="130" cy="156" rx="9" ry="3" fill="#7a2e4a"/>
+
+          <!-- whiskers -->
+          <g stroke="#fff7ee" stroke-width="2" stroke-linecap="round" opacity="0.85">
+            <line x1="78" y1="138" x2="40" y2="130"/>
+            <line x1="78" y1="146" x2="40" y2="148"/>
+            <line x1="182" y1="138" x2="220" y2="130"/>
+            <line x1="182" y1="146" x2="220" y2="148"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <input type="text" id="msg" placeholder="Type a message for Whiskers…" autocomplete="off" />
+        <button id="send">Say it</button>
+      </div>
+      <div class="voicebar">
+        <span>Voice</span>
+        <select id="voice"></select>
+        <span>Pitch</span>
+        <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1.6" />
+      </div>
+      <div class="row">
+        <button class="ghost" id="surprise" style="flex:1">🎲 Surprise me</button>
+        <button class="ghost" id="stop" style="flex:1">🤫 Hush</button>
+      </div>
+      <p class="hint">Whiskers replies out loud and on screen. (Sound needs a tap on mobile.)</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const cat     = document.getElementById('cat');
+  const mouth   = document.getElementById('mouth');
+  const speech  = document.getElementById('speech');
+  const input   = document.getElementById('msg');
+  const voiceSel= document.getElementById('voice');
+  const pitchEl = document.getElementById('pitch');
+
+  const synth = window.speechSynthesis;
+  let voices = [];
+
+  // ---- Cat personality: turn your message into a cat-flavoured reply ----
+  const catFillers = ["Meow", "Mrrrow", "Purr", "Mew", "Nyaaa"];
+  const catReactions = [
+    "I would simply nap on that.",
+    "Did somebody say treats?",
+    "I knocked something off a table just for you.",
+    "Pet me at once, human.",
+    "That is exactly what I was thinking, obviously.",
+    "I shall consider it after my 14th nap.",
+    "Bring tuna and we shall discuss.",
+    "You have my full attention for three seconds.",
+  ];
+  const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  function catify(text) {
+    const t = text.trim();
+    if (!t) return rand(catFillers) + "?";
+    const lower = t.toLowerCase();
+    if (/(hi|hello|hey|yo)\b/.test(lower)) return `${rand(catFillers)}! Hello to you too.`;
+    if (lower.includes('how are you')) return "Purr-fectly lazy, thank you for asking.";
+    if (lower.includes('food') || lower.includes('eat') || lower.includes('treat'))
+      return "Treats?! Yes. The answer is always yes.";
+    if (lower.includes('love')) return "Mrrrow... I love you too. Now feed me.";
+    if (lower.endsWith('?')) return `${rand(catFillers)}. ${rand(catReactions)}`;
+    return `${rand(catFillers)}~ You said "${t}". ${rand(catReactions)}`;
+  }
+
+  const surprises = [
+    "I am a tiny lion and this house is my savannah.",
+    "Knock knock. (It is me, knocking your cup off the desk.)",
+    "I have decided your keyboard is now a bed.",
+    "Mrrrow! The red dot was here. I felt it.",
+    "3 a.m. is the perfect time for a concert. You're welcome.",
+    "I am not stuck. I meant to fit in this box.",
+  ];
+
+  // ---- Speaking + lip sync ----
+  let mouthTimer = null;
+  function startMouth() {
+    cat.classList.add('talking');
+    stopMouth();
+    mouthTimer = setInterval(() => {
+      const open = 2 + Math.random() * 10;
+      mouth.setAttribute('ry', open.toFixed(1));
+      mouth.setAttribute('rx', (7 + Math.random() * 4).toFixed(1));
+    }, 90);
+  }
+  function stopMouth() {
+    if (mouthTimer) { clearInterval(mouthTimer); mouthTimer = null; }
+    mouth.setAttribute('ry', 3);
+    mouth.setAttribute('rx', 9);
+    cat.classList.remove('talking');
+  }
+
+  function showBubble(text) {
+    speech.textContent = text;
+    speech.classList.add('show');
+  }
+  function hideBubble() {
+    speech.classList.remove('show');
+  }
+
+  function speak(text) {
+    showBubble(text);
+    startMouth();
+
+    if (!synth) return; // no TTS support: bubble + mouth only
+    synth.cancel();
+
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = parseFloat(pitchEl.value);
+    u.rate = 1.05;
+    const chosen = voices[voiceSel.value];
+    if (chosen) u.voice = chosen;
+
+    u.onend = () => {
+      stopMouth();
+      // keep the bubble up a moment, then fade
+      setTimeout(hideBubble, 1400);
+    };
+    u.onerror = u.onend;
+    synth.speak(u);
+
+    // Fallback in case onend never fires (some browsers)
+    const approx = Math.min(8000, 1200 + text.length * 70);
+    setTimeout(() => { if (!mouthTimer) return; stopMouth(); setTimeout(hideBubble, 1400); }, approx);
+  }
+
+  function meow(rawText) {
+    const reply = catify(rawText);
+    speak(reply);
+  }
+
+  // ---- Voice list ----
+  function loadVoices() {
+    voices = synth ? synth.getVoices() : [];
+    voiceSel.innerHTML = '';
+    if (!voices.length) {
+      const o = document.createElement('option');
+      o.textContent = 'Default voice';
+      voiceSel.appendChild(o);
+      return;
+    }
+    voices.forEach((v, i) => {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = `${v.name} (${v.lang})`;
+      voiceSel.appendChild(o);
+    });
+    // Prefer a female / en voice as default for a cuter cat
+    const pref = voices.findIndex(v => /female|samantha|zira|google us english/i.test(v.name));
+    voiceSel.value = pref >= 0 ? pref : 0;
+  }
+  if (synth) {
+    loadVoices();
+    synth.onvoiceschanged = loadVoices;
+  } else {
+    loadVoices();
+  }
+
+  // ---- Events ----
+  document.getElementById('send').addEventListener('click', () => {
+    meow(input.value);
+    input.value = '';
+    input.focus();
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { meow(input.value); input.value = ''; }
+  });
+  document.getElementById('surprise').addEventListener('click', () => speak(rand(surprises)));
+  document.getElementById('stop').addEventListener('click', () => {
+    if (synth) synth.cancel();
+    stopMouth();
+    hideBubble();
+  });
+
+  // Greet on first interaction (browsers block autoplay audio otherwise)
+  let greeted = false;
+  function greet() {
+    if (greeted) return;
+    greeted = true;
+    speak("Meow! I'm Whiskers. Type something and I'll talk back!");
+  }
+  document.body.addEventListener('click', greet, { once: true });
+  input.addEventListener('focus', greet, { once: true });
+})();
+</script>
+</body>
+</html>
