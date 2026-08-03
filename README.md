@@ -1,32 +1,66 @@
 # dog
 
-Biscuit, a talking dog. A single self-contained HTML page — no build step, no dependencies.
+Biscuit, a talking dog wired up to Claude. A tiny Node server holds the API key and
+talks to the Claude API; the browser handles the voice and the animation.
 
 ## Run it
 
-Open `index.html` in a browser, or serve the directory:
-
 ```sh
-python3 -m http.server 8000
+npm install
+export ANTHROPIC_API_KEY=sk-ant-...
+npm start
 # then visit http://localhost:8000
 ```
 
+`PORT` overrides the port. Without a key the page loads and Biscuit tells you the
+key is missing.
+
+## How it works
+
+```
+browser  ──POST /api/chat──►  server.js  ──messages.create──►  Claude API
+   ▲                             │
+   └── { state, line } ──────────┘
+```
+
+- **The key never reaches the browser.** `server.js` holds it and is the only thing
+  that calls Anthropic. The page only ever talks to `/api/chat`.
+- **Claude picks the mood, not just the words.** The request uses structured outputs
+  (`output_config.format`) with a schema of `{ state, line }`, where `state` is one of
+  the five animation states. So the reply and the animation always agree, with no
+  keyword-sniffing on our side.
+- **Model:** `claude-opus-5` at `effort: "low"` — a dog doesn't need to deliberate,
+  and low effort keeps replies fast and cheap. Thinking stays on (the default), which
+  avoids the failure modes that come with disabling it.
+- **Refusals:** the request opts into `fallbacks: "default"`, so if Claude's safety
+  classifiers decline something, the API re-serves it on a fallback model instead of
+  returning nothing. A refusal that survives that gets a in-character deflection.
+- **Memory:** conversation history lives in `server.js` in a `Map`, keyed per browser
+  tab and capped at 24 messages. Restarting the server gives Biscuit amnesia.
+
+## Voice
+
+Anthropic doesn't offer speech APIs, so both directions use the browser's built-in
+Web Speech API — no extra key, no extra service:
+
+- **Out:** `SpeechSynthesis` reads Biscuit's replies aloud. Toggle with **Voice**.
+- **In:** `SpeechRecognition` behind the 🎤 button. This is Chrome/Edge only today;
+  in other browsers the button is disabled and you type instead.
+
 ## States
 
-Biscuit is a small state machine. The current state is always shown in the chip
-next to his name, and each state has its own animation:
+The chip beside his name always shows the current state, and each drives its own
+animation:
 
-| State      | Entered by                    | Behavior                                    |
-| ---------- | ----------------------------- | ------------------------------------------- |
-| `idle`     | default, and after any action | slow tail wag                               |
-| `talking`  | **Speak**                     | jaw moves, says a random line out loud      |
-| `excited`  | **Pet**                       | fast tail wag, tongue out                   |
-| `eating`   | **Feed**                      | head bobs, tongue out                       |
-| `sleeping` | **Sleep**                     | eyes shut, floating `z`s; stays until woken |
+| State      | Meaning                          | Animation                       |
+| ---------- | -------------------------------- | ------------------------------- |
+| `idle`     | neutral, waiting                 | slow tail wag                   |
+| `talking`  | engaged in conversation          | jaw moves, steady wag           |
+| `excited`  | praise, play, walks, "ball"      | fast wag, tongue out            |
+| `eating`   | food is happening                | head bobs, tongue out           |
+| `sleeping` | settling down                    | eyes shut, floating `z`s        |
 
-`talking`, `excited`, and `eating` settle back to `idle` after a few seconds.
-`sleeping` persists until you press **Wake up**.
+**Sleep** is a local toggle and doesn't call the API. Everything else — including the
+**Pet**, **Feed**, and **Trick** buttons, which just send canned messages — goes to Claude.
 
-Speech uses the browser's built-in `SpeechSynthesis`, toggleable with the
-**Voice** checkbox. The page respects `prefers-reduced-motion` and follows the
-viewer's light or dark theme.
+The page respects `prefers-reduced-motion` and follows your light or dark theme.

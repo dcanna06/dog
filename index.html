@@ -182,6 +182,46 @@
     color: var(--ball-ink);
   }
 
+  .composer {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .composer input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    color: var(--ink);
+    background: var(--bubble);
+    border: 1.5px solid var(--line);
+    border-radius: 0.7rem;
+    padding: 0.65rem 0.8rem;
+  }
+  .composer input[type="text"]::placeholder { color: var(--ink-soft); }
+  .composer input[type="text"]:focus-visible,
+  .composer button:focus-visible { outline: 2px solid var(--ball); outline-offset: 2px; }
+  .icon-btn { padding: 0.65rem 0.8rem; line-height: 1; }
+  .icon-btn[aria-pressed="true"] {
+    background: var(--collar);
+    border-color: var(--collar);
+    color: #fff;
+  }
+  button[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .bubble.pending { color: var(--ink-soft); }
+  @keyframes pulse { from { opacity: 0.35; } to { opacity: 1; } }
+  .bubble.pending::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.5rem;
+    border-radius: 50%;
+    background: var(--ball);
+    animation: pulse 0.7s ease-in-out infinite alternate;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble.pending::before { animation: none; }
+  }
+
   .foot {
     display: flex;
     justify-content: space-between;
@@ -233,15 +273,21 @@
     </svg>
   </div>
 
+  <form class="composer" id="composer">
+    <input type="text" id="input" placeholder="Say something to Biscuit…" autocomplete="off" aria-label="Say something to Biscuit">
+    <button type="button" class="icon-btn" id="btnMic" aria-pressed="false" title="Talk to him">🎤</button>
+    <button type="submit" class="primary" id="btnSend">Send</button>
+  </form>
+
   <div class="controls">
-    <button class="primary" id="btnSpeak">Speak</button>
     <button id="btnPet">Pet</button>
     <button id="btnFeed">Feed</button>
+    <button id="btnTrick">Trick</button>
     <button id="btnSleep">Sleep</button>
   </div>
 
   <div class="foot">
-    <span id="hint">Click Speak to hear him.</span>
+    <span id="hint">He's listening.</span>
     <label><input type="checkbox" id="voiceToggle" checked> Voice</label>
   </div>
 </main>
@@ -250,72 +296,157 @@
   const stage = document.getElementById('stage');
   const chip = document.getElementById('stateChip');
   const bubble = document.getElementById('bubble');
+  const form = document.getElementById('composer');
+  const input = document.getElementById('input');
+  const btnSend = document.getElementById('btnSend');
+  const btnMic = document.getElementById('btnMic');
+  const btnSleep = document.getElementById('btnSleep');
   const voiceToggle = document.getElementById('voiceToggle');
+  const hint = document.getElementById('hint');
 
-  const PHRASES = [
-    "Bark bark! I mean — hello!",
-    "I have been a good boy for 47 consecutive minutes.",
-    "The mail carrier and I have unfinished business.",
-    "Ball? Ball. Ball! BALL!",
-    "I would die for you. Also, drop that sandwich.",
-    "The vacuum is my enemy and I am winning.",
-    "Squirrel status: being monitored.",
-    "You smell like you've met other dogs. Explain.",
-  ];
+  const STATES = ['idle', 'talking', 'excited', 'eating', 'sleeping'];
+
+  // One conversation per tab. Biscuit remembers it until the server restarts.
+  let sessionId = sessionStorage.getItem('biscuitSession');
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    sessionStorage.setItem('biscuitSession', sessionId);
+  }
 
   let state = 'idle';
-  let revertTimer = null;
+  let busy = false;
 
-  function setState(next, line, quiet) {
-    state = next;
-    stage.dataset.state = next;
-    chip.textContent = 'state: ' + next;
-    bubble.textContent = line;
-    bubble.classList.toggle('quiet', !!quiet);
-    document.getElementById('btnSleep').textContent = next === 'sleeping' ? 'Wake up' : 'Sleep';
+  function setState(next) {
+    state = STATES.includes(next) ? next : 'idle';
+    stage.dataset.state = state;
+    chip.textContent = 'state: ' + state;
+    btnSleep.textContent = state === 'sleeping' ? 'Wake up' : 'Sleep';
   }
 
-  function settleBackToIdle(afterMs) {
-    clearTimeout(revertTimer);
-    revertTimer = setTimeout(() => {
-      if (state !== 'sleeping') setState('idle', '…tail wagging, awaiting further instructions.', true);
-    }, afterMs);
+  function setLine(text, { quiet = false, pending = false } = {}) {
+    bubble.textContent = text;
+    bubble.classList.toggle('quiet', quiet);
+    bubble.classList.toggle('pending', pending);
   }
 
-  function say(text) {
+  function setBusy(next) {
+    busy = next;
+    btnSend.disabled = next;
+    for (const button of document.querySelectorAll('.controls button')) {
+      button.disabled = next;
+    }
+    chip.textContent = next ? 'state: listening…' : 'state: ' + state;
+  }
+
+  function speak(text) {
     if (!voiceToggle.checked || !('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.pitch = 1.4;
-    u.rate = 1.05;
-    speechSynthesis.speak(u);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.pitch = 1.4;
+    utterance.rate = 1.05;
+    speechSynthesis.speak(utterance);
   }
 
-  document.getElementById('btnSpeak').addEventListener('click', () => {
-    const line = PHRASES[Math.floor(Math.random() * PHRASES.length)];
-    setState('talking', line);
-    say(line);
-    settleBackToIdle(4000);
+  async function say(message) {
+    if (busy) return;
+    setBusy(true);
+    setLine('Biscuit is thinking about it…', { pending: true });
+
+    let response;
+    try {
+      response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, message }),
+      });
+    } catch {
+      setLine("Can't reach the kennel. Start the server with `npm start`, then try again.", { quiet: true });
+      setBusy(false);
+      return;
+    }
+
+    const data = await response.json().catch(() => ({}));
+    setBusy(false);
+
+    if (!response.ok) {
+      setLine(data.error ?? `The server answered ${response.status}. Check its logs.`, { quiet: true });
+      return;
+    }
+
+    if (data.sessionId) {
+      sessionId = data.sessionId;
+      sessionStorage.setItem('biscuitSession', sessionId);
+    }
+    setState(data.state);
+    setLine(data.line);
+    speak(data.line);
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = '';
+    say(message);
   });
 
-  document.getElementById('btnPet').addEventListener('click', () => {
-    setState('excited', 'Yes yes yes yes yes. Right behind the ear. YES.');
-    settleBackToIdle(3500);
-  });
+  document.getElementById('btnPet').addEventListener('click', () => say('*scratches you behind the ear*'));
+  document.getElementById('btnFeed').addEventListener('click', () => say('*puts down a bowl of kibble*'));
+  document.getElementById('btnTrick').addEventListener('click', () => say('Show me a trick!'));
 
-  document.getElementById('btnFeed').addEventListener('click', () => {
-    setState('eating', '*inhales kibble* …was there food just now? More?');
-    settleBackToIdle(3500);
-  });
-
-  document.getElementById('btnSleep').addEventListener('click', () => {
+  // Sleep is a local toggle — no need to bother Claude to close his eyes.
+  btnSleep.addEventListener('click', () => {
+    if (busy) return;
     if (state === 'sleeping') {
-      setState('idle', '*stretches* Reporting for duty.', false);
-      settleBackToIdle(3000);
+      setState('idle');
+      setLine('*stretches* Reporting for duty.');
     } else {
-      clearTimeout(revertTimer);
       if ('speechSynthesis' in window) speechSynthesis.cancel();
-      setState('sleeping', '…dreaming of an infinitely long tennis ball.', true);
+      setState('sleeping');
+      setLine('…dreaming of an infinitely long tennis ball.', { quiet: true });
     }
   });
+
+  // Speech-to-text uses the browser's Web Speech API (Chrome and Edge today).
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    btnMic.disabled = true;
+    btnMic.title = 'Your browser has no speech recognition — type to him instead';
+  } else {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    let listening = false;
+
+    const setListening = (next) => {
+      listening = next;
+      btnMic.setAttribute('aria-pressed', String(next));
+      hint.textContent = next ? 'Listening — say something.' : "He's listening.";
+    };
+
+    btnMic.addEventListener('click', () => {
+      if (listening) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+          setListening(true);
+        } catch {
+          setListening(false);
+        }
+      }
+    });
+
+    recognition.addEventListener('result', (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) say(transcript);
+    });
+    recognition.addEventListener('end', () => setListening(false));
+    recognition.addEventListener('error', (event) => {
+      setListening(false);
+      hint.textContent = event.error === 'not-allowed'
+        ? 'Microphone blocked — allow it in your browser to talk to him.'
+        : `Microphone error: ${event.error}`;
+    });
+  }
 </script>

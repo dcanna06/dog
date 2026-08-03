@@ -1,0 +1,13 @@
+{
+  "name": "dog",
+  "version": "1.0.0",
+  "description": "Biscuit, a talking dog wired up to Claude.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  }
+}
